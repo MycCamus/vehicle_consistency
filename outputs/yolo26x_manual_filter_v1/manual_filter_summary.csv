@@ -1,0 +1,2 @@
+version,input_exclusion_ids,normalized_exclusion_ids,target_review_candidates_before_filter,candidate_excluded_by_manual_filter,already_auto_excluded_ids,missing_ids,final_target_tracks,note
+manual_filter_v1,"0013,0012,0083,0080,0204,0203,0283,0312,0401,0423,0537,0480,0505,0604","mot_0013,mot_0012,mot_0083,mot_0080,mot_0204,mot_0203,mot_0283,mot_0312,mot_0401,mot_0423,mot_0537,mot_0480,mot_0505,mot_0604",52,10,"mot_0204,mot_0203,mot_0312,mot_0401",,42,User manual exclusion pass from yolo26x overlay video; removes visually invalid/non-target tracks.

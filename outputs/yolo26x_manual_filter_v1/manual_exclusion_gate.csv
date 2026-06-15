@@ -1,0 +1,15 @@
+version,track_id,input_id,track_status,manual_filter_action,class_name,start_time,end_time,duration_sec,mean_confidence,max_displacement_px,note
+manual_filter_v1,mot_0013,0013,target_review_candidate,EXCLUDE_FROM_FINAL,car,0.00,18.64,18.64,0.3400,3.16,User manual exclusion pass from yolo26x overlay video; removes visually invalid/non-target tracks.
+manual_filter_v1,mot_0012,0012,target_review_candidate,EXCLUDE_FROM_FINAL,car,0.00,30.54,30.54,0.5836,2.22,User manual exclusion pass from yolo26x overlay video; removes visually invalid/non-target tracks.
+manual_filter_v1,mot_0083,0083,target_review_candidate,EXCLUDE_FROM_FINAL,car,2.08,6.64,4.56,0.4421,171.06,User manual exclusion pass from yolo26x overlay video; removes visually invalid/non-target tracks.
+manual_filter_v1,mot_0080,0080,target_review_candidate,EXCLUDE_FROM_FINAL,car,2.02,5.52,3.50,0.3260,0.83,User manual exclusion pass from yolo26x overlay video; removes visually invalid/non-target tracks.
+manual_filter_v1,mot_0204,0204,excluded,ALREADY_AUTO_EXCLUDED,car,12.38,12.76,0.38,0.3166,29.03,User manual exclusion pass from yolo26x overlay video; removes visually invalid/non-target tracks.
+manual_filter_v1,mot_0203,0203,excluded,ALREADY_AUTO_EXCLUDED,car,12.36,12.78,0.42,0.2894,0.15,User manual exclusion pass from yolo26x overlay video; removes visually invalid/non-target tracks.
+manual_filter_v1,mot_0283,0283,target_review_candidate,EXCLUDE_FROM_FINAL,car,17.34,19.20,1.86,0.3525,150.81,User manual exclusion pass from yolo26x overlay video; removes visually invalid/non-target tracks.
+manual_filter_v1,mot_0312,0312,excluded,ALREADY_AUTO_EXCLUDED,car,19.10,19.24,0.14,0.4002,4.56,User manual exclusion pass from yolo26x overlay video; removes visually invalid/non-target tracks.
+manual_filter_v1,mot_0401,0401,excluded,ALREADY_AUTO_EXCLUDED,car,25.16,25.32,0.16,0.3607,4.62,User manual exclusion pass from yolo26x overlay video; removes visually invalid/non-target tracks.
+manual_filter_v1,mot_0423,0423,target_review_candidate,EXCLUDE_FROM_FINAL,car,27.66,28.36,0.70,0.3628,17.24,User manual exclusion pass from yolo26x overlay video; removes visually invalid/non-target tracks.
+manual_filter_v1,mot_0537,0537,target_review_candidate,EXCLUDE_FROM_FINAL,car,30.94,32.30,1.36,0.3334,220.75,User manual exclusion pass from yolo26x overlay video; removes visually invalid/non-target tracks.
+manual_filter_v1,mot_0480,0480,target_review_candidate,EXCLUDE_FROM_FINAL,car,30.20,32.04,1.84,0.4488,220.91,User manual exclusion pass from yolo26x overlay video; removes visually invalid/non-target tracks.
+manual_filter_v1,mot_0505,0505,target_review_candidate,EXCLUDE_FROM_FINAL,car,30.54,32.00,1.46,0.3462,160.89,User manual exclusion pass from yolo26x overlay video; removes visually invalid/non-target tracks.
+manual_filter_v1,mot_0604,0604,target_review_candidate,EXCLUDE_FROM_FINAL,car,32.74,39.98,7.24,0.3344,1.95,User manual exclusion pass from yolo26x overlay video; removes visually invalid/non-target tracks.

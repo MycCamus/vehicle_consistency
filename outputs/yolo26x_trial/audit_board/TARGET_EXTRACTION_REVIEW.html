@@ -1,0 +1,1270 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>MVI_0866 车辆目标提取审计</title>
+  <style>
+    :root {
+      --ink: #202832;
+      --muted: #62707f;
+      --line: #d7dde4;
+      --paper: #f4f1ea;
+      --panel: #fff;
+      --blue: #17364c;
+      --green: #236b4f;
+      --amber: #986613;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--paper);
+      color: var(--ink);
+      font-family: "Songti SC", "Noto Serif CJK SC", "Times New Roman", serif;
+    }
+    header {
+      background: var(--blue);
+      color: white;
+      padding: 22px 28px;
+      border-bottom: 4px solid #c59c55;
+    }
+    header h1 { margin: 0 0 8px; font-size: 28px; }
+    header p { margin: 0; color: #dce7ef; line-height: 1.6; }
+    main { max-width: 1500px; margin: 0 auto; padding: 18px; }
+    section, .track-card {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      padding: 16px;
+      margin-bottom: 16px;
+      box-shadow: 0 10px 24px rgba(22, 32, 42, 0.10);
+    }
+    .guide { border-left: 6px solid var(--green); background: #eef8f2; }
+    .stats { display: grid; grid-template-columns: repeat(4, minmax(130px, 1fr)); gap: 10px; }
+    .stat { border: 1px solid var(--line); border-radius: 6px; padding: 12px; background: #f8fafc; }
+    .stat b { display: block; font: 700 25px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+    .track-head { display: flex; justify-content: space-between; gap: 12px; border-bottom: 1px solid var(--line); padding-bottom: 10px; }
+    .track-head span, .metrics span { color: var(--muted); font: 13px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+    .metrics { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+    .metrics span { border: 1px solid var(--line); border-radius: 999px; padding: 5px 9px; background: #f6f8fa; }
+    .overlay-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 10px;
+    }
+    figure {
+      margin: 0;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      overflow: hidden;
+      background: #101820;
+    }
+    figure img {
+      display: block;
+      width: 100%;
+      aspect-ratio: 16 / 9;
+      object-fit: cover;
+    }
+    figcaption {
+      background: #edf2f6;
+      padding: 6px 8px;
+      font: 12px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      overflow-wrap: anywhere;
+    }
+    @media (max-width: 1000px) {
+      .stats, .overlay-grid { grid-template-columns: 1fr; }
+      .track-head { display: block; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>MVI_0866 车辆目标提取审计</h1>
+    <p>本页只审车辆目标提取和 track recall，不生成车道、转向或 SUMO route。</p>
+  </header>
+  <main>
+    <section class="guide">
+      <h2>怎么审</h2>
+      <ol>
+        <li>看 overlay/contact sheet 中主车流机动车是否都有稳定 track id。</li>
+        <li>如果明显有车连续多帧没有框或没有 track，记 FAIL。</li>
+        <li>如果只是单帧丢框或局部抖动，可以记 WARNING 或继续。</li>
+        <li>不要补车、不要画框、不要改 track id、不要判断转向。</li>
+      </ol>
+      <div class="stats">
+        <div class="stat"><b>133</b><span>total tracks</span></div>
+        <div class="stat"><b>52</b><span>review candidates</span></div>
+        <div class="stat"><b>81</b><span>excluded tracks</span></div>
+        <div class="stat"><b>{&#x27;car&#x27;: 101, &#x27;bus&#x27;: 10, &#x27;truck&#x27;: 22}</b><span>class counts</span></div>
+      </div>
+      <p>Contact sheet: <code>target_tracks/target_track_contact_sheet.jpg</code></p>
+    </section>
+    <section>
+      <h2>连续跟踪 overlay</h2>
+      <p>这里按 0.5s 间隔展示完整 40s clip 的目标跟踪结果。人工只看主车流机动车是否有稳定框和 track id，是否存在连续多帧漏车。</p>
+      <div class="overlay-grid">
+        
+            <figure>
+              <img src="../target_tracks/target_track_overlay_frames/target_track_f000000.jpg" alt="target_track_f000000">
+              <figcaption>target_track_f000000.jpg</figcaption>
+            </figure>
+            
+
+            <figure>
+              <img src="../target_tracks/target_track_overlay_frames/target_track_f000025.jpg" alt="target_track_f000025">
+              <figcaption>target_track_f000025.jpg</figcaption>
+            </figure>
+            
+
+            <figure>
+              <img src="../target_tracks/target_track_overlay_frames/target_track_f000050.jpg" alt="target_track_f000050">
+              <figcaption>target_track_f000050.jpg</figcaption>
+            </figure>
+            
+
+            <figure>
+              <img src="../target_tracks/target_track_overlay_frames/target_track_f000075.jpg" alt="target_track_f000075">
+              <figcaption>target_track_f000075.jpg</figcaption>
+            </figure>
+            
+
+            <figure>
+              <img src="../target_tracks/target_track_overlay_frames/target_track_f000100.jpg" alt="target_track_f000100">
+              <figcaption>target_track_f000100.jpg</figcaption>
+            </figure>
+            
+
+            <figure>
+              <img src="../target_tracks/target_track_overlay_frames/target_track_f000125.jpg" alt="target_track_f000125">
+              <figcaption>target_track_f000125.jpg</figcaption>
+            </figure>
+            
+
+            <figure>
+              <img src="../target_tracks/target_track_overlay_frames/target_track_f000150.jpg" alt="target_track_f000150">
+              <figcaption>target_track_f000150.jpg</figcaption>
+            </figure>
+            
+
+            <figure>
+              <img src="../target_tracks/target_track_overlay_frames/target_track_f000175.jpg" alt="target_track_f000175">
+              <figcaption>target_track_f000175.jpg</figcaption>
+            </figure>
+            
+
+            <figure>
+              <img src="../target_tracks/target_track_overlay_frames/target_track_f000200.jpg" alt="target_track_f000200">
+              <figcaption>target_track_f000200.jpg</figcaption>
+            </figure>
+            
+
+            <figure>
+              <img src="../target_tracks/target_track_overlay_frames/target_track_f000225.jpg" alt="target_track_f000225">
+              <figcaption>target_track_f000225.jpg</figcaption>
+            </figure>
+            
+
+            <figure>
+              <img src="../target_tracks/target_track_overlay_frames/target_track_f000250.jpg" alt="target_track_f000250">
+              <figcaption>target_track_f000250.jpg</figcaption>
+            </figure>
+            
+
+            <figure>
+              <img src="../target_tracks/target_track_overlay_frames/target_track_f000275.jpg" alt="target_track_f000275">
+              <figcaption>target_track_f000275.jpg</figcaption>
+            </figure>
+            
+
+            <figure>
+              <img src="../target_tracks/target_track_overlay_frames/target_track_f000300.jpg" alt="target_track_f000300">
+              <figcaption>target_track_f000300.jpg</figcaption>
+            </figure>
+            
+
+            <figure>
+              <img src="../target_tracks/target_track_overlay_frames/target_track_f000325.jpg" alt="target_track_f000325">
+              <figcaption>target_track_f000325.jpg</figcaption>
+            </figure>
+            
+
+            <figure>
+              <img src="../target_tracks/target_track_overlay_frames/target_track_f000350.jpg" alt="target_track_f000350">
+              <figcaption>target_track_f000350.jpg</figcaption>
+            </figure>
+            
+
+            <figure>
+              <img src="../target_tracks/target_track_overlay_frames/target_track_f000375.jpg" alt="target_track_f000375">
+              <figcaption>target_track_f000375.jpg</figcaption>
+            </figure>
+            
+
+            <figure>
+              <img src="../target_tracks/target_track_overlay_frames/target_track_f000400.jpg" alt="target_track_f000400">
+              <figcaption>target_track_f000400.jpg</figcaption>
+            </figure>
+            
+
+            <figure>
+              <img src="../target_tracks/target_track_overlay_frames/target_track_f000425.jpg" alt="target_track_f000425">
+              <figcaption>target_track_f000425.jpg</figcaption>
+            </figure>
+            
+
+            <figure>
+              <img src="../target_tracks/target_track_overlay_frames/target_track_f000450.jpg" alt="target_track_f000450">
+              <figcaption>target_track_f000450.jpg</figcaption>
+            </figure>
+            
+
+            <figure>
+              <img src="../target_tracks/target_track_overlay_frames/target_track_f000475.jpg" alt="target_track_f000475">
+              <figcaption>target_track_f000475.jpg</figcaption>
+            </figure>
+            
+
+            <figure>
+              <img src="../target_tracks/target_track_overlay_frames/target_track_f000500.jpg" alt="target_track_f000500">
+              <figcaption>target_track_f000500.jpg</figcaption>
+            </figure>
+            
+
+            <figure>
+              <img src="../target_tracks/target_track_overlay_frames/target_track_f000525.jpg" alt="target_track_f000525">
+              <figcaption>target_track_f000525.jpg</figcaption>
+            </figure>
+            
+
+            <figure>
+              <img src="../target_tracks/target_track_overlay_frames/target_track_f000550.jpg" alt="target_track_f000550">
+              <figcaption>target_track_f000550.jpg</figcaption>
+            </figure>
+            
+
+            <figure>
+              <img src="../target_tracks/target_track_overlay_frames/target_track_f000575.jpg" alt="target_track_f000575">
+              <figcaption>target_track_f000575.jpg</figcaption>
+            </figure>
+            
+
+            <figure>
+              <img src="../target_tracks/target_track_overlay_frames/target_track_f000600.jpg" alt="target_track_f000600">
+              <figcaption>target_track_f000600.jpg</figcaption>
+            </figure>
+            
+
+            <figure>
+              <img src="../target_tracks/target_track_overlay_frames/target_track_f000625.jpg" alt="target_track_f000625">
+              <figcaption>target_track_f000625.jpg</figcaption>
+            </figure>
+            
+
+            <figure>
+              <img src="../target_tracks/target_track_overlay_frames/target_track_f000650.jpg" alt="target_track_f000650">
+              <figcaption>target_track_f000650.jpg</figcaption>
+            </figure>
+            
+
+            <figure>
+              <img src="../target_tracks/target_track_overlay_frames/target_track_f000675.jpg" alt="target_track_f000675">
+              <figcaption>target_track_f000675.jpg</figcaption>
+            </figure>
+            
+
+            <figure>
+              <img src="../target_tracks/target_track_overlay_frames/target_track_f000700.jpg" alt="target_track_f000700">
+              <figcaption>target_track_f000700.jpg</figcaption>
+            </figure>
+            
+
+            <figure>
+              <img src="../target_tracks/target_track_overlay_frames/target_track_f000725.jpg" alt="target_track_f000725">
+              <figcaption>target_track_f000725.jpg</figcaption>
+            </figure>
+            
+
+            <figure>
+              <img src="../target_tracks/target_track_overlay_frames/target_track_f000750.jpg" alt="target_track_f000750">
+              <figcaption>target_track_f000750.jpg</figcaption>
+            </figure>
+            
+
+            <figure>
+              <img src="../target_tracks/target_track_overlay_frames/target_track_f000775.jpg" alt="target_track_f000775">
+              <figcaption>target_track_f000775.jpg</figcaption>
+            </figure>
+            
+
+            <figure>
+              <img src="../target_tracks/target_track_overlay_frames/target_track_f000800.jpg" alt="target_track_f000800">
+              <figcaption>target_track_f000800.jpg</figcaption>
+            </figure>
+            
+
+            <figure>
+              <img src="../target_tracks/target_track_overlay_frames/target_track_f000825.jpg" alt="target_track_f000825">
+              <figcaption>target_track_f000825.jpg</figcaption>
+            </figure>
+            
+
+            <figure>
+              <img src="../target_tracks/target_track_overlay_frames/target_track_f000850.jpg" alt="target_track_f000850">
+              <figcaption>target_track_f000850.jpg</figcaption>
+            </figure>
+            
+
+            <figure>
+              <img src="../target_tracks/target_track_overlay_frames/target_track_f000875.jpg" alt="target_track_f000875">
+              <figcaption>target_track_f000875.jpg</figcaption>
+            </figure>
+            
+
+            <figure>
+              <img src="../target_tracks/target_track_overlay_frames/target_track_f000900.jpg" alt="target_track_f000900">
+              <figcaption>target_track_f000900.jpg</figcaption>
+            </figure>
+            
+
+            <figure>
+              <img src="../target_tracks/target_track_overlay_frames/target_track_f000925.jpg" alt="target_track_f000925">
+              <figcaption>target_track_f000925.jpg</figcaption>
+            </figure>
+            
+
+            <figure>
+              <img src="../target_tracks/target_track_overlay_frames/target_track_f000950.jpg" alt="target_track_f000950">
+              <figcaption>target_track_f000950.jpg</figcaption>
+            </figure>
+            
+
+            <figure>
+              <img src="../target_tracks/target_track_overlay_frames/target_track_f000975.jpg" alt="target_track_f000975">
+              <figcaption>target_track_f000975.jpg</figcaption>
+            </figure>
+            
+
+            <figure>
+              <img src="../target_tracks/target_track_overlay_frames/target_track_f001000.jpg" alt="target_track_f001000">
+              <figcaption>target_track_f001000.jpg</figcaption>
+            </figure>
+            
+
+            <figure>
+              <img src="../target_tracks/target_track_overlay_frames/target_track_f001025.jpg" alt="target_track_f001025">
+              <figcaption>target_track_f001025.jpg</figcaption>
+            </figure>
+            
+
+            <figure>
+              <img src="../target_tracks/target_track_overlay_frames/target_track_f001050.jpg" alt="target_track_f001050">
+              <figcaption>target_track_f001050.jpg</figcaption>
+            </figure>
+            
+
+            <figure>
+              <img src="../target_tracks/target_track_overlay_frames/target_track_f001075.jpg" alt="target_track_f001075">
+              <figcaption>target_track_f001075.jpg</figcaption>
+            </figure>
+            
+
+            <figure>
+              <img src="../target_tracks/target_track_overlay_frames/target_track_f001100.jpg" alt="target_track_f001100">
+              <figcaption>target_track_f001100.jpg</figcaption>
+            </figure>
+            
+
+            <figure>
+              <img src="../target_tracks/target_track_overlay_frames/target_track_f001125.jpg" alt="target_track_f001125">
+              <figcaption>target_track_f001125.jpg</figcaption>
+            </figure>
+            
+
+            <figure>
+              <img src="../target_tracks/target_track_overlay_frames/target_track_f001150.jpg" alt="target_track_f001150">
+              <figcaption>target_track_f001150.jpg</figcaption>
+            </figure>
+            
+
+            <figure>
+              <img src="../target_tracks/target_track_overlay_frames/target_track_f001175.jpg" alt="target_track_f001175">
+              <figcaption>target_track_f001175.jpg</figcaption>
+            </figure>
+            
+
+            <figure>
+              <img src="../target_tracks/target_track_overlay_frames/target_track_f001200.jpg" alt="target_track_f001200">
+              <figcaption>target_track_f001200.jpg</figcaption>
+            </figure>
+            
+
+            <figure>
+              <img src="../target_tracks/target_track_overlay_frames/target_track_f001225.jpg" alt="target_track_f001225">
+              <figcaption>target_track_f001225.jpg</figcaption>
+            </figure>
+            
+
+            <figure>
+              <img src="../target_tracks/target_track_overlay_frames/target_track_f001250.jpg" alt="target_track_f001250">
+              <figcaption>target_track_f001250.jpg</figcaption>
+            </figure>
+            
+
+            <figure>
+              <img src="../target_tracks/target_track_overlay_frames/target_track_f001275.jpg" alt="target_track_f001275">
+              <figcaption>target_track_f001275.jpg</figcaption>
+            </figure>
+            
+
+            <figure>
+              <img src="../target_tracks/target_track_overlay_frames/target_track_f001300.jpg" alt="target_track_f001300">
+              <figcaption>target_track_f001300.jpg</figcaption>
+            </figure>
+            
+
+            <figure>
+              <img src="../target_tracks/target_track_overlay_frames/target_track_f001325.jpg" alt="target_track_f001325">
+              <figcaption>target_track_f001325.jpg</figcaption>
+            </figure>
+            
+
+            <figure>
+              <img src="../target_tracks/target_track_overlay_frames/target_track_f001350.jpg" alt="target_track_f001350">
+              <figcaption>target_track_f001350.jpg</figcaption>
+            </figure>
+            
+
+            <figure>
+              <img src="../target_tracks/target_track_overlay_frames/target_track_f001375.jpg" alt="target_track_f001375">
+              <figcaption>target_track_f001375.jpg</figcaption>
+            </figure>
+            
+
+            <figure>
+              <img src="../target_tracks/target_track_overlay_frames/target_track_f001400.jpg" alt="target_track_f001400">
+              <figcaption>target_track_f001400.jpg</figcaption>
+            </figure>
+            
+
+            <figure>
+              <img src="../target_tracks/target_track_overlay_frames/target_track_f001425.jpg" alt="target_track_f001425">
+              <figcaption>target_track_f001425.jpg</figcaption>
+            </figure>
+            
+
+            <figure>
+              <img src="../target_tracks/target_track_overlay_frames/target_track_f001450.jpg" alt="target_track_f001450">
+              <figcaption>target_track_f001450.jpg</figcaption>
+            </figure>
+            
+
+            <figure>
+              <img src="../target_tracks/target_track_overlay_frames/target_track_f001475.jpg" alt="target_track_f001475">
+              <figcaption>target_track_f001475.jpg</figcaption>
+            </figure>
+            
+
+            <figure>
+              <img src="../target_tracks/target_track_overlay_frames/target_track_f001500.jpg" alt="target_track_f001500">
+              <figcaption>target_track_f001500.jpg</figcaption>
+            </figure>
+            
+
+            <figure>
+              <img src="../target_tracks/target_track_overlay_frames/target_track_f001525.jpg" alt="target_track_f001525">
+              <figcaption>target_track_f001525.jpg</figcaption>
+            </figure>
+            
+
+            <figure>
+              <img src="../target_tracks/target_track_overlay_frames/target_track_f001550.jpg" alt="target_track_f001550">
+              <figcaption>target_track_f001550.jpg</figcaption>
+            </figure>
+            
+
+            <figure>
+              <img src="../target_tracks/target_track_overlay_frames/target_track_f001575.jpg" alt="target_track_f001575">
+              <figcaption>target_track_f001575.jpg</figcaption>
+            </figure>
+            
+
+            <figure>
+              <img src="../target_tracks/target_track_overlay_frames/target_track_f001600.jpg" alt="target_track_f001600">
+              <figcaption>target_track_f001600.jpg</figcaption>
+            </figure>
+            
+
+            <figure>
+              <img src="../target_tracks/target_track_overlay_frames/target_track_f001625.jpg" alt="target_track_f001625">
+              <figcaption>target_track_f001625.jpg</figcaption>
+            </figure>
+            
+
+            <figure>
+              <img src="../target_tracks/target_track_overlay_frames/target_track_f001650.jpg" alt="target_track_f001650">
+              <figcaption>target_track_f001650.jpg</figcaption>
+            </figure>
+            
+
+            <figure>
+              <img src="../target_tracks/target_track_overlay_frames/target_track_f001675.jpg" alt="target_track_f001675">
+              <figcaption>target_track_f001675.jpg</figcaption>
+            </figure>
+            
+
+            <figure>
+              <img src="../target_tracks/target_track_overlay_frames/target_track_f001700.jpg" alt="target_track_f001700">
+              <figcaption>target_track_f001700.jpg</figcaption>
+            </figure>
+            
+
+            <figure>
+              <img src="../target_tracks/target_track_overlay_frames/target_track_f001725.jpg" alt="target_track_f001725">
+              <figcaption>target_track_f001725.jpg</figcaption>
+            </figure>
+            
+
+            <figure>
+              <img src="../target_tracks/target_track_overlay_frames/target_track_f001750.jpg" alt="target_track_f001750">
+              <figcaption>target_track_f001750.jpg</figcaption>
+            </figure>
+            
+
+            <figure>
+              <img src="../target_tracks/target_track_overlay_frames/target_track_f001775.jpg" alt="target_track_f001775">
+              <figcaption>target_track_f001775.jpg</figcaption>
+            </figure>
+            
+
+            <figure>
+              <img src="../target_tracks/target_track_overlay_frames/target_track_f001800.jpg" alt="target_track_f001800">
+              <figcaption>target_track_f001800.jpg</figcaption>
+            </figure>
+            
+
+            <figure>
+              <img src="../target_tracks/target_track_overlay_frames/target_track_f001825.jpg" alt="target_track_f001825">
+              <figcaption>target_track_f001825.jpg</figcaption>
+            </figure>
+            
+
+            <figure>
+              <img src="../target_tracks/target_track_overlay_frames/target_track_f001850.jpg" alt="target_track_f001850">
+              <figcaption>target_track_f001850.jpg</figcaption>
+            </figure>
+            
+
+            <figure>
+              <img src="../target_tracks/target_track_overlay_frames/target_track_f001875.jpg" alt="target_track_f001875">
+              <figcaption>target_track_f001875.jpg</figcaption>
+            </figure>
+            
+
+            <figure>
+              <img src="../target_tracks/target_track_overlay_frames/target_track_f001900.jpg" alt="target_track_f001900">
+              <figcaption>target_track_f001900.jpg</figcaption>
+            </figure>
+            
+
+            <figure>
+              <img src="../target_tracks/target_track_overlay_frames/target_track_f001925.jpg" alt="target_track_f001925">
+              <figcaption>target_track_f001925.jpg</figcaption>
+            </figure>
+            
+
+            <figure>
+              <img src="../target_tracks/target_track_overlay_frames/target_track_f001950.jpg" alt="target_track_f001950">
+              <figcaption>target_track_f001950.jpg</figcaption>
+            </figure>
+            
+
+            <figure>
+              <img src="../target_tracks/target_track_overlay_frames/target_track_f001975.jpg" alt="target_track_f001975">
+              <figcaption>target_track_f001975.jpg</figcaption>
+            </figure>
+            
+      </div>
+    </section>
+    <section>
+      <h2>目标 track 列表</h2>
+      
+            <article class="track-card">
+              <div class="track-head">
+                <h3>mot_0001 | car</h3>
+                <span>0.00-1.64s / frames=80</span>
+              </div>
+              <p>只判断这个 track 是否覆盖一辆真实机动车，以及是否存在明显漏车/错 track。不要判断车道、转向或 SUMO 事件。</p>
+              <div class="metrics">
+                <span>mean_conf=0.7244</span>
+                <span>disp=100.90px</span>
+                <span>raw_id=1</span>
+              </div>
+            </article>
+            
+            <article class="track-card">
+              <div class="track-head">
+                <h3>mot_0002 | car</h3>
+                <span>0.00-6.60s / frames=331</span>
+              </div>
+              <p>只判断这个 track 是否覆盖一辆真实机动车，以及是否存在明显漏车/错 track。不要判断车道、转向或 SUMO 事件。</p>
+              <div class="metrics">
+                <span>mean_conf=0.8769</span>
+                <span>disp=752.78px</span>
+                <span>raw_id=2</span>
+              </div>
+            </article>
+            
+            <article class="track-card">
+              <div class="track-head">
+                <h3>mot_0003 | car</h3>
+                <span>0.00-9.08s / frames=455</span>
+              </div>
+              <p>只判断这个 track 是否覆盖一辆真实机动车，以及是否存在明显漏车/错 track。不要判断车道、转向或 SUMO 事件。</p>
+              <div class="metrics">
+                <span>mean_conf=0.7770</span>
+                <span>disp=789.81px</span>
+                <span>raw_id=3</span>
+              </div>
+            </article>
+            
+            <article class="track-card">
+              <div class="track-head">
+                <h3>mot_0004 | car</h3>
+                <span>0.00-4.86s / frames=243</span>
+              </div>
+              <p>只判断这个 track 是否覆盖一辆真实机动车，以及是否存在明显漏车/错 track。不要判断车道、转向或 SUMO 事件。</p>
+              <div class="metrics">
+                <span>mean_conf=0.8990</span>
+                <span>disp=609.70px</span>
+                <span>raw_id=4</span>
+              </div>
+            </article>
+            
+            <article class="track-card">
+              <div class="track-head">
+                <h3>mot_0006 | car</h3>
+                <span>0.00-5.58s / frames=280</span>
+              </div>
+              <p>只判断这个 track 是否覆盖一辆真实机动车，以及是否存在明显漏车/错 track。不要判断车道、转向或 SUMO 事件。</p>
+              <div class="metrics">
+                <span>mean_conf=0.7706</span>
+                <span>disp=389.51px</span>
+                <span>raw_id=6</span>
+              </div>
+            </article>
+            
+            <article class="track-card">
+              <div class="track-head">
+                <h3>mot_0007 | car</h3>
+                <span>0.00-7.70s / frames=384</span>
+              </div>
+              <p>只判断这个 track 是否覆盖一辆真实机动车，以及是否存在明显漏车/错 track。不要判断车道、转向或 SUMO 事件。</p>
+              <div class="metrics">
+                <span>mean_conf=0.7729</span>
+                <span>disp=539.11px</span>
+                <span>raw_id=7</span>
+              </div>
+            </article>
+            
+            <article class="track-card">
+              <div class="track-head">
+                <h3>mot_0008 | car</h3>
+                <span>0.00-4.28s / frames=193</span>
+              </div>
+              <p>只判断这个 track 是否覆盖一辆真实机动车，以及是否存在明显漏车/错 track。不要判断车道、转向或 SUMO 事件。</p>
+              <div class="metrics">
+                <span>mean_conf=0.7622</span>
+                <span>disp=316.12px</span>
+                <span>raw_id=8</span>
+              </div>
+            </article>
+            
+            <article class="track-card">
+              <div class="track-head">
+                <h3>mot_0009 | bus</h3>
+                <span>0.00-6.80s / frames=330</span>
+              </div>
+              <p>只判断这个 track 是否覆盖一辆真实机动车，以及是否存在明显漏车/错 track。不要判断车道、转向或 SUMO 事件。</p>
+              <div class="metrics">
+                <span>mean_conf=0.5660</span>
+                <span>disp=528.79px</span>
+                <span>raw_id=9</span>
+              </div>
+            </article>
+            
+            <article class="track-card">
+              <div class="track-head">
+                <h3>mot_0010 | car</h3>
+                <span>0.00-39.98s / frames=1999</span>
+              </div>
+              <p>只判断这个 track 是否覆盖一辆真实机动车，以及是否存在明显漏车/错 track。不要判断车道、转向或 SUMO 事件。</p>
+              <div class="metrics">
+                <span>mean_conf=0.8396</span>
+                <span>disp=4.12px</span>
+                <span>raw_id=10</span>
+              </div>
+            </article>
+            
+            <article class="track-card">
+              <div class="track-head">
+                <h3>mot_0011 | car</h3>
+                <span>0.00-36.44s / frames=1814</span>
+              </div>
+              <p>只判断这个 track 是否覆盖一辆真实机动车，以及是否存在明显漏车/错 track。不要判断车道、转向或 SUMO 事件。</p>
+              <div class="metrics">
+                <span>mean_conf=0.5373</span>
+                <span>disp=932.00px</span>
+                <span>raw_id=11</span>
+              </div>
+            </article>
+            
+            <article class="track-card">
+              <div class="track-head">
+                <h3>mot_0012 | car</h3>
+                <span>0.00-30.54s / frames=1528</span>
+              </div>
+              <p>只判断这个 track 是否覆盖一辆真实机动车，以及是否存在明显漏车/错 track。不要判断车道、转向或 SUMO 事件。</p>
+              <div class="metrics">
+                <span>mean_conf=0.5836</span>
+                <span>disp=2.22px</span>
+                <span>raw_id=12</span>
+              </div>
+            </article>
+            
+            <article class="track-card">
+              <div class="track-head">
+                <h3>mot_0013 | car</h3>
+                <span>0.00-18.64s / frames=870</span>
+              </div>
+              <p>只判断这个 track 是否覆盖一辆真实机动车，以及是否存在明显漏车/错 track。不要判断车道、转向或 SUMO 事件。</p>
+              <div class="metrics">
+                <span>mean_conf=0.3400</span>
+                <span>disp=3.16px</span>
+                <span>raw_id=13</span>
+              </div>
+            </article>
+            
+            <article class="track-card">
+              <div class="track-head">
+                <h3>mot_0028 | bus</h3>
+                <span>0.60-1.94s / frames=68</span>
+              </div>
+              <p>只判断这个 track 是否覆盖一辆真实机动车，以及是否存在明显漏车/错 track。不要判断车道、转向或 SUMO 事件。</p>
+              <div class="metrics">
+                <span>mean_conf=0.5360</span>
+                <span>disp=93.59px</span>
+                <span>raw_id=28</span>
+              </div>
+            </article>
+            
+            <article class="track-card">
+              <div class="track-head">
+                <h3>mot_0080 | car</h3>
+                <span>2.02-5.52s / frames=116</span>
+              </div>
+              <p>只判断这个 track 是否覆盖一辆真实机动车，以及是否存在明显漏车/错 track。不要判断车道、转向或 SUMO 事件。</p>
+              <div class="metrics">
+                <span>mean_conf=0.3260</span>
+                <span>disp=0.83px</span>
+                <span>raw_id=80</span>
+              </div>
+            </article>
+            
+            <article class="track-card">
+              <div class="track-head">
+                <h3>mot_0083 | car</h3>
+                <span>2.08-6.64s / frames=181</span>
+              </div>
+              <p>只判断这个 track 是否覆盖一辆真实机动车，以及是否存在明显漏车/错 track。不要判断车道、转向或 SUMO 事件。</p>
+              <div class="metrics">
+                <span>mean_conf=0.4421</span>
+                <span>disp=171.06px</span>
+                <span>raw_id=83</span>
+              </div>
+            </article>
+            
+            <article class="track-card">
+              <div class="track-head">
+                <h3>mot_0104 | car</h3>
+                <span>2.80-39.98s / frames=1860</span>
+              </div>
+              <p>只判断这个 track 是否覆盖一辆真实机动车，以及是否存在明显漏车/错 track。不要判断车道、转向或 SUMO 事件。</p>
+              <div class="metrics">
+                <span>mean_conf=0.9181</span>
+                <span>disp=275.31px</span>
+                <span>raw_id=104</span>
+              </div>
+            </article>
+            
+            <article class="track-card">
+              <div class="track-head">
+                <h3>mot_0134 | car</h3>
+                <span>4.30-16.16s / frames=594</span>
+              </div>
+              <p>只判断这个 track 是否覆盖一辆真实机动车，以及是否存在明显漏车/错 track。不要判断车道、转向或 SUMO 事件。</p>
+              <div class="metrics">
+                <span>mean_conf=0.4027</span>
+                <span>disp=1.23px</span>
+                <span>raw_id=134</span>
+              </div>
+            </article>
+            
+            <article class="track-card">
+              <div class="track-head">
+                <h3>mot_0137 | car</h3>
+                <span>4.38-39.98s / frames=1781</span>
+              </div>
+              <p>只判断这个 track 是否覆盖一辆真实机动车，以及是否存在明显漏车/错 track。不要判断车道、转向或 SUMO 事件。</p>
+              <div class="metrics">
+                <span>mean_conf=0.9126</span>
+                <span>disp=412.05px</span>
+                <span>raw_id=137</span>
+              </div>
+            </article>
+            
+            <article class="track-card">
+              <div class="track-head">
+                <h3>mot_0166 | car</h3>
+                <span>5.64-6.24s / frames=31</span>
+              </div>
+              <p>只判断这个 track 是否覆盖一辆真实机动车，以及是否存在明显漏车/错 track。不要判断车道、转向或 SUMO 事件。</p>
+              <div class="metrics">
+                <span>mean_conf=0.5975</span>
+                <span>disp=32.05px</span>
+                <span>raw_id=166</span>
+              </div>
+            </article>
+            
+            <article class="track-card">
+              <div class="track-head">
+                <h3>mot_0189 | car</h3>
+                <span>8.10-17.02s / frames=446</span>
+              </div>
+              <p>只判断这个 track 是否覆盖一辆真实机动车，以及是否存在明显漏车/错 track。不要判断车道、转向或 SUMO 事件。</p>
+              <div class="metrics">
+                <span>mean_conf=0.8963</span>
+                <span>disp=1053.19px</span>
+                <span>raw_id=189</span>
+              </div>
+            </article>
+            
+            <article class="track-card">
+              <div class="track-head">
+                <h3>mot_0195 | car</h3>
+                <span>10.94-39.98s / frames=1453</span>
+              </div>
+              <p>只判断这个 track 是否覆盖一辆真实机动车，以及是否存在明显漏车/错 track。不要判断车道、转向或 SUMO 事件。</p>
+              <div class="metrics">
+                <span>mean_conf=0.8805</span>
+                <span>disp=349.18px</span>
+                <span>raw_id=195</span>
+              </div>
+            </article>
+            
+            <article class="track-card">
+              <div class="track-head">
+                <h3>mot_0209 | car</h3>
+                <span>12.68-39.98s / frames=1364</span>
+              </div>
+              <p>只判断这个 track 是否覆盖一辆真实机动车，以及是否存在明显漏车/错 track。不要判断车道、转向或 SUMO 事件。</p>
+              <div class="metrics">
+                <span>mean_conf=0.9142</span>
+                <span>disp=139.74px</span>
+                <span>raw_id=209</span>
+              </div>
+            </article>
+            
+            <article class="track-card">
+              <div class="track-head">
+                <h3>mot_0226 | car</h3>
+                <span>14.02-15.06s / frames=36</span>
+              </div>
+              <p>只判断这个 track 是否覆盖一辆真实机动车，以及是否存在明显漏车/错 track。不要判断车道、转向或 SUMO 事件。</p>
+              <div class="metrics">
+                <span>mean_conf=0.3309</span>
+                <span>disp=0.66px</span>
+                <span>raw_id=226</span>
+              </div>
+            </article>
+            
+            <article class="track-card">
+              <div class="track-head">
+                <h3>mot_0231 | car</h3>
+                <span>14.76-39.98s / frames=1262</span>
+              </div>
+              <p>只判断这个 track 是否覆盖一辆真实机动车，以及是否存在明显漏车/错 track。不要判断车道、转向或 SUMO 事件。</p>
+              <div class="metrics">
+                <span>mean_conf=0.8841</span>
+                <span>disp=258.79px</span>
+                <span>raw_id=231</span>
+              </div>
+            </article>
+            
+            <article class="track-card">
+              <div class="track-head">
+                <h3>mot_0235 | car</h3>
+                <span>14.96-39.98s / frames=1248</span>
+              </div>
+              <p>只判断这个 track 是否覆盖一辆真实机动车，以及是否存在明显漏车/错 track。不要判断车道、转向或 SUMO 事件。</p>
+              <div class="metrics">
+                <span>mean_conf=0.9288</span>
+                <span>disp=119.51px</span>
+                <span>raw_id=235</span>
+              </div>
+            </article>
+            
+            <article class="track-card">
+              <div class="track-head">
+                <h3>mot_0278 | car</h3>
+                <span>17.06-18.98s / frames=96</span>
+              </div>
+              <p>只判断这个 track 是否覆盖一辆真实机动车，以及是否存在明显漏车/错 track。不要判断车道、转向或 SUMO 事件。</p>
+              <div class="metrics">
+                <span>mean_conf=0.3648</span>
+                <span>disp=22.83px</span>
+                <span>raw_id=278</span>
+              </div>
+            </article>
+            
+            <article class="track-card">
+              <div class="track-head">
+                <h3>mot_0283 | car</h3>
+                <span>17.34-19.20s / frames=46</span>
+              </div>
+              <p>只判断这个 track 是否覆盖一辆真实机动车，以及是否存在明显漏车/错 track。不要判断车道、转向或 SUMO 事件。</p>
+              <div class="metrics">
+                <span>mean_conf=0.3525</span>
+                <span>disp=150.81px</span>
+                <span>raw_id=283</span>
+              </div>
+            </article>
+            
+            <article class="track-card">
+              <div class="track-head">
+                <h3>mot_0379 | car</h3>
+                <span>21.22-21.82s / frames=31</span>
+              </div>
+              <p>只判断这个 track 是否覆盖一辆真实机动车，以及是否存在明显漏车/错 track。不要判断车道、转向或 SUMO 事件。</p>
+              <div class="metrics">
+                <span>mean_conf=0.4260</span>
+                <span>disp=13.64px</span>
+                <span>raw_id=379</span>
+              </div>
+            </article>
+            
+            <article class="track-card">
+              <div class="track-head">
+                <h3>mot_0384 | car</h3>
+                <span>22.30-22.88s / frames=29</span>
+              </div>
+              <p>只判断这个 track 是否覆盖一辆真实机动车，以及是否存在明显漏车/错 track。不要判断车道、转向或 SUMO 事件。</p>
+              <div class="metrics">
+                <span>mean_conf=0.3929</span>
+                <span>disp=12.73px</span>
+                <span>raw_id=384</span>
+              </div>
+            </article>
+            
+            <article class="track-card">
+              <div class="track-head">
+                <h3>mot_0389 | truck</h3>
+                <span>23.02-23.60s / frames=30</span>
+              </div>
+              <p>只判断这个 track 是否覆盖一辆真实机动车，以及是否存在明显漏车/错 track。不要判断车道、转向或 SUMO 事件。</p>
+              <div class="metrics">
+                <span>mean_conf=0.3652</span>
+                <span>disp=12.63px</span>
+                <span>raw_id=389</span>
+              </div>
+            </article>
+            
+            <article class="track-card">
+              <div class="track-head">
+                <h3>mot_0391 | truck</h3>
+                <span>23.70-26.32s / frames=132</span>
+              </div>
+              <p>只判断这个 track 是否覆盖一辆真实机动车，以及是否存在明显漏车/错 track。不要判断车道、转向或 SUMO 事件。</p>
+              <div class="metrics">
+                <span>mean_conf=0.4295</span>
+                <span>disp=48.09px</span>
+                <span>raw_id=391</span>
+              </div>
+            </article>
+            
+            <article class="track-card">
+              <div class="track-head">
+                <h3>mot_0392 | car</h3>
+                <span>23.84-30.96s / frames=352</span>
+              </div>
+              <p>只判断这个 track 是否覆盖一辆真实机动车，以及是否存在明显漏车/错 track。不要判断车道、转向或 SUMO 事件。</p>
+              <div class="metrics">
+                <span>mean_conf=0.7869</span>
+                <span>disp=520.49px</span>
+                <span>raw_id=392</span>
+              </div>
+            </article>
+            
+            <article class="track-card">
+              <div class="track-head">
+                <h3>mot_0394 | car</h3>
+                <span>24.58-33.24s / frames=433</span>
+              </div>
+              <p>只判断这个 track 是否覆盖一辆真实机动车，以及是否存在明显漏车/错 track。不要判断车道、转向或 SUMO 事件。</p>
+              <div class="metrics">
+                <span>mean_conf=0.7350</span>
+                <span>disp=1393.57px</span>
+                <span>raw_id=394</span>
+              </div>
+            </article>
+            
+            <article class="track-card">
+              <div class="track-head">
+                <h3>mot_0402 | car</h3>
+                <span>25.18-25.96s / frames=40</span>
+              </div>
+              <p>只判断这个 track 是否覆盖一辆真实机动车，以及是否存在明显漏车/错 track。不要判断车道、转向或 SUMO 事件。</p>
+              <div class="metrics">
+                <span>mean_conf=0.5566</span>
+                <span>disp=31.25px</span>
+                <span>raw_id=402</span>
+              </div>
+            </article>
+            
+            <article class="track-card">
+              <div class="track-head">
+                <h3>mot_0420 | car</h3>
+                <span>27.32-28.04s / frames=30</span>
+              </div>
+              <p>只判断这个 track 是否覆盖一辆真实机动车，以及是否存在明显漏车/错 track。不要判断车道、转向或 SUMO 事件。</p>
+              <div class="metrics">
+                <span>mean_conf=0.3988</span>
+                <span>disp=29.03px</span>
+                <span>raw_id=420</span>
+              </div>
+            </article>
+            
+            <article class="track-card">
+              <div class="track-head">
+                <h3>mot_0421 | car</h3>
+                <span>27.32-27.82s / frames=5</span>
+              </div>
+              <p>只判断这个 track 是否覆盖一辆真实机动车，以及是否存在明显漏车/错 track。不要判断车道、转向或 SUMO 事件。</p>
+              <div class="metrics">
+                <span>mean_conf=0.3360</span>
+                <span>disp=1.37px</span>
+                <span>raw_id=421</span>
+              </div>
+            </article>
+            
+            <article class="track-card">
+              <div class="track-head">
+                <h3>mot_0423 | car</h3>
+                <span>27.66-28.36s / frames=34</span>
+              </div>
+              <p>只判断这个 track 是否覆盖一辆真实机动车，以及是否存在明显漏车/错 track。不要判断车道、转向或 SUMO 事件。</p>
+              <div class="metrics">
+                <span>mean_conf=0.3628</span>
+                <span>disp=17.24px</span>
+                <span>raw_id=423</span>
+              </div>
+            </article>
+            
+            <article class="track-card">
+              <div class="track-head">
+                <h3>mot_0424 | car</h3>
+                <span>27.80-39.98s / frames=579</span>
+              </div>
+              <p>只判断这个 track 是否覆盖一辆真实机动车，以及是否存在明显漏车/错 track。不要判断车道、转向或 SUMO 事件。</p>
+              <div class="metrics">
+                <span>mean_conf=0.5966</span>
+                <span>disp=184.91px</span>
+                <span>raw_id=424</span>
+              </div>
+            </article>
+            
+            <article class="track-card">
+              <div class="track-head">
+                <h3>mot_0480 | car</h3>
+                <span>30.20-32.04s / frames=89</span>
+              </div>
+              <p>只判断这个 track 是否覆盖一辆真实机动车，以及是否存在明显漏车/错 track。不要判断车道、转向或 SUMO 事件。</p>
+              <div class="metrics">
+                <span>mean_conf=0.4488</span>
+                <span>disp=220.91px</span>
+                <span>raw_id=480</span>
+              </div>
+            </article>
+            
+            <article class="track-card">
+              <div class="track-head">
+                <h3>mot_0488 | car</h3>
+                <span>30.30-32.10s / frames=81</span>
+              </div>
+              <p>只判断这个 track 是否覆盖一辆真实机动车，以及是否存在明显漏车/错 track。不要判断车道、转向或 SUMO 事件。</p>
+              <div class="metrics">
+                <span>mean_conf=0.3702</span>
+                <span>disp=4.46px</span>
+                <span>raw_id=488</span>
+              </div>
+            </article>
+            
+            <article class="track-card">
+              <div class="track-head">
+                <h3>mot_0500 | car</h3>
+                <span>30.44-31.92s / frames=47</span>
+              </div>
+              <p>只判断这个 track 是否覆盖一辆真实机动车，以及是否存在明显漏车/错 track。不要判断车道、转向或 SUMO 事件。</p>
+              <div class="metrics">
+                <span>mean_conf=0.3371</span>
+                <span>disp=1.74px</span>
+                <span>raw_id=500</span>
+              </div>
+            </article>
+            
+            <article class="track-card">
+              <div class="track-head">
+                <h3>mot_0505 | car</h3>
+                <span>30.54-32.00s / frames=43</span>
+              </div>
+              <p>只判断这个 track 是否覆盖一辆真实机动车，以及是否存在明显漏车/错 track。不要判断车道、转向或 SUMO 事件。</p>
+              <div class="metrics">
+                <span>mean_conf=0.3462</span>
+                <span>disp=160.89px</span>
+                <span>raw_id=505</span>
+              </div>
+            </article>
+            
+            <article class="track-card">
+              <div class="track-head">
+                <h3>mot_0527 | car</h3>
+                <span>30.82-31.48s / frames=6</span>
+              </div>
+              <p>只判断这个 track 是否覆盖一辆真实机动车，以及是否存在明显漏车/错 track。不要判断车道、转向或 SUMO 事件。</p>
+              <div class="metrics">
+                <span>mean_conf=0.3201</span>
+                <span>disp=71.90px</span>
+                <span>raw_id=527</span>
+              </div>
+            </article>
+            
+            <article class="track-card">
+              <div class="track-head">
+                <h3>mot_0537 | car</h3>
+                <span>30.94-32.30s / frames=25</span>
+              </div>
+              <p>只判断这个 track 是否覆盖一辆真实机动车，以及是否存在明显漏车/错 track。不要判断车道、转向或 SUMO 事件。</p>
+              <div class="metrics">
+                <span>mean_conf=0.3334</span>
+                <span>disp=220.75px</span>
+                <span>raw_id=537</span>
+              </div>
+            </article>
+            
+            <article class="track-card">
+              <div class="track-head">
+                <h3>mot_0566 | car</h3>
+                <span>31.66-39.58s / frames=397</span>
+              </div>
+              <p>只判断这个 track 是否覆盖一辆真实机动车，以及是否存在明显漏车/错 track。不要判断车道、转向或 SUMO 事件。</p>
+              <div class="metrics">
+                <span>mean_conf=0.8264</span>
+                <span>disp=525.94px</span>
+                <span>raw_id=566</span>
+              </div>
+            </article>
+            
+            <article class="track-card">
+              <div class="track-head">
+                <h3>mot_0570 | car</h3>
+                <span>31.76-33.00s / frames=62</span>
+              </div>
+              <p>只判断这个 track 是否覆盖一辆真实机动车，以及是否存在明显漏车/错 track。不要判断车道、转向或 SUMO 事件。</p>
+              <div class="metrics">
+                <span>mean_conf=0.7655</span>
+                <span>disp=137.36px</span>
+                <span>raw_id=570</span>
+              </div>
+            </article>
+            
+            <article class="track-card">
+              <div class="track-head">
+                <h3>mot_0580 | car</h3>
+                <span>31.90-39.98s / frames=405</span>
+              </div>
+              <p>只判断这个 track 是否覆盖一辆真实机动车，以及是否存在明显漏车/错 track。不要判断车道、转向或 SUMO 事件。</p>
+              <div class="metrics">
+                <span>mean_conf=0.6019</span>
+                <span>disp=2.16px</span>
+                <span>raw_id=580</span>
+              </div>
+            </article>
+            
+            <article class="track-card">
+              <div class="track-head">
+                <h3>mot_0588 | car</h3>
+                <span>32.36-33.40s / frames=48</span>
+              </div>
+              <p>只判断这个 track 是否覆盖一辆真实机动车，以及是否存在明显漏车/错 track。不要判断车道、转向或 SUMO 事件。</p>
+              <div class="metrics">
+                <span>mean_conf=0.5850</span>
+                <span>disp=56.41px</span>
+                <span>raw_id=588</span>
+              </div>
+            </article>
+            
+            <article class="track-card">
+              <div class="track-head">
+                <h3>mot_0604 | car</h3>
+                <span>32.74-39.98s / frames=342</span>
+              </div>
+              <p>只判断这个 track 是否覆盖一辆真实机动车，以及是否存在明显漏车/错 track。不要判断车道、转向或 SUMO 事件。</p>
+              <div class="metrics">
+                <span>mean_conf=0.3344</span>
+                <span>disp=1.95px</span>
+                <span>raw_id=604</span>
+              </div>
+            </article>
+            
+            <article class="track-card">
+              <div class="track-head">
+                <h3>mot_0621 | car</h3>
+                <span>34.20-39.98s / frames=288</span>
+              </div>
+              <p>只判断这个 track 是否覆盖一辆真实机动车，以及是否存在明显漏车/错 track。不要判断车道、转向或 SUMO 事件。</p>
+              <div class="metrics">
+                <span>mean_conf=0.6349</span>
+                <span>disp=162.99px</span>
+                <span>raw_id=621</span>
+              </div>
+            </article>
+            
+            <article class="track-card">
+              <div class="track-head">
+                <h3>mot_0622 | car</h3>
+                <span>34.22-39.40s / frames=177</span>
+              </div>
+              <p>只判断这个 track 是否覆盖一辆真实机动车，以及是否存在明显漏车/错 track。不要判断车道、转向或 SUMO 事件。</p>
+              <div class="metrics">
+                <span>mean_conf=0.4806</span>
+                <span>disp=285.51px</span>
+                <span>raw_id=622</span>
+              </div>
+            </article>
+            
+            <article class="track-card">
+              <div class="track-head">
+                <h3>mot_0670 | car</h3>
+                <span>36.88-38.42s / frames=77</span>
+              </div>
+              <p>只判断这个 track 是否覆盖一辆真实机动车，以及是否存在明显漏车/错 track。不要判断车道、转向或 SUMO 事件。</p>
+              <div class="metrics">
+                <span>mean_conf=0.8287</span>
+                <span>disp=153.48px</span>
+                <span>raw_id=670</span>
+              </div>
+            </article>
+            
+    </section>
+  </main>
+</body>
+</html>
