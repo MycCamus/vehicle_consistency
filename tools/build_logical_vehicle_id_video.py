@@ -25,7 +25,9 @@ def final_detection_label(row: dict) -> str:
     logical_id = row.get("logical_vehicle_id", "").strip()
     if not logical_id:
         raise ValueError("Final render row is missing logical_vehicle_id")
-    return logical_id
+    class_name = row.get("class_name", "")
+    confidence = float(row.get("confidence") or 0.0)
+    return f"{logical_id} {class_name} {confidence:.2f}"
 
 
 def review_status_token(row: dict) -> str:
@@ -91,18 +93,21 @@ def style_for_row(row: dict, colors: dict[str, tuple[int, int, int]], mode: str 
 
 
 def load_font(size: int):
-    from PIL import ImageFont
+   from PIL import ImageFont
 
-    for path in [
-        "/System/Library/Fonts/Supplemental/Arial.ttf",
-        "/System/Library/Fonts/Helvetica.ttc",
-        "/Library/Fonts/Arial.ttf",
-    ]:
-        try:
-            return ImageFont.truetype(path, size=size)
-        except OSError:
-            continue
-    return ImageFont.load_default()
+   for path in [
+       "/System/Library/Fonts/Supplemental/Arial.ttf",
+       "/System/Library/Fonts/Helvetica.ttc",
+       "/Library/Fonts/Arial.ttf",
+        "C:/Windows/Fonts/arial.ttf",
+        "C:/Windows/Fonts/calibri.ttf",
+        "C:/Windows/Fonts/segoeui.ttf",
+   ]:
+       try:
+           return ImageFont.truetype(path, size=size)
+       except OSError:
+           continue
+   return ImageFont.load_default()
 
 
 def text_size(draw, text: str, font) -> tuple[int, int]:
@@ -123,6 +128,9 @@ def draw_detection(draw, row: dict, colors: dict[str, tuple[int, int, int]], fon
     color = style_for_row(row, colors, mode)
     x1, y1, x2, y2 = [int(round(float(row[key]))) for key in ("x1", "y1", "x2", "y2")]
     width = 5
+    # White border for contrast against dark backgrounds
+    for offset in range(1):
+        draw.rectangle((x1 - offset - 1, y1 - offset - 1, x2 + offset + 1, y2 + offset + 1), outline=(255, 255, 255))
     for offset in range(width):
         draw.rectangle((x1 - offset, y1 - offset, x2 + offset, y2 + offset), outline=color)
     draw_label(draw, detection_label(row, mode), x1, max(24, y1 - 5), color, font)

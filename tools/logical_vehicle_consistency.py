@@ -232,6 +232,18 @@ FLICKER_GAP_FIELDS = [
     "reason",
 ]
 
+INTERPOLATION_FIELDS = [
+    "logical_vehicle_id",
+    "from_frame",
+    "to_frame",
+    "gap_frames",
+    "interpolated_count",
+    "center_distance_px",
+    "center_distance_per_frame",
+    "status",
+]
+
+
 
 @dataclass
 class DuplicateGroupingResult:
@@ -301,6 +313,7 @@ class ConsistencyOutputs:
     target_quality_report: list[dict]
     cross_raw_recovery_review: list[dict]
     flicker_gap_review: list[dict]
+    interpolation_review: list[dict]
 
     def as_dict(self) -> dict[str, list[dict]]:
         return {
@@ -322,6 +335,7 @@ class ConsistencyOutputs:
             "target_quality_report": self.target_quality_report,
             "cross_raw_recovery_review": self.cross_raw_recovery_review,
             "flicker_gap_review": self.flicker_gap_review,
+            "interpolation_review": self.interpolation_review,
         }
 
 
@@ -975,6 +989,8 @@ def target_quality_reasons(metrics: dict, detected_frame_count: int) -> list[str
         reasons.append("border_short_target")
     if detected_frame_count < 80 and metrics["total_displacement_px"] < 8.0:
         reasons.append("static_like")
+    if metrics["mean_speed_px_per_frame"] < 0.5 and metrics["total_displacement_px"] < 10.0:
+        reasons.append("static_vehicle")
     nearby_competitor_ratio = metrics.get("nearby_competitor_count", 0) / max(1, detected_frame_count)
     if reasons and nearby_competitor_ratio >= 0.30:
         reasons.append("nearby_competitor")
@@ -1044,6 +1060,9 @@ def build_target_validity_report(logical_rows: list[dict]) -> list[dict]:
         ):
             status = "AUTO_EXCLUDE"
             exclude_reason = "short_static_false_positive"
+        elif "static_vehicle" in quality_reasons:
+            status = "AUTO_EXCLUDE"
+            exclude_reason = "static_vehicle"
         elif "border_short_target" in quality_reasons and "small_area" in quality_reasons:
             status = "REVIEW_ONLY_IF_UNCERTAIN"
             review_reason = "border_short_target"
@@ -1454,11 +1473,11 @@ def build_cross_raw_recovery_review(
 
 def apply_cross_raw_recovery_merges(
     logical_rows: list[dict],
-    fragment_max_frames: int = 60,
+    fragment_max_frames: int = 80,
     mature_min_frames: int = 100,
-    max_center_distance_per_frame: float = 1.0,
-    max_center_distance_px: float = 45.0,
-    max_size_ratio: float = 1.35,
+    max_center_distance_per_frame: float = 3.0,
+    max_center_distance_px: float = 120.0,
+    max_size_ratio: float = 1.50,
     min_best_candidate_margin: float = 0.50,
 ) -> tuple[list[dict], list[dict]]:
     """Merge only high-confidence cross-raw recoveries from a short fragment into a mature path."""
@@ -1486,8 +1505,8 @@ def apply_cross_raw_recovery_merges(
         is_clear_best = competitor_count <= 1 or best_margin >= min_best_candidate_margin
         is_mergeable = (
             row.get("candidate_rank") == "1"
-            and len(from_rows) <= fragment_max_frames
-            and len(to_rows) >= mature_min_frames
+            and min(len(from_rows), len(to_rows)) <= fragment_max_frames
+            and max(len(from_rows), len(to_rows)) >= mature_min_frames
             and float(row["center_distance_per_frame"]) <= max_center_distance_per_frame
             and float(row["center_distance_px"]) <= max_center_distance_px
             and float(row["bbox_size_ratio"]) <= max_size_ratio
@@ -1793,6 +1812,70 @@ def build_risky_accepted_link_review(accepted_links: list[dict]) -> list[dict]:
     return rows
 
 
+
+def fill_occlusion_gaps(
+    logical_rows: list[dict],
+    max_gap_frames: int = 3,
+) -> tuple[list[dict], list[dict]]:
+    """Fill small gaps (1-3 frames) in logical vehicle tracks by linear interpolation.
+    If frame A and frame A+n both have detections, interpolate frames A+1...A+n-1.
+    Interpolated rows get association_status = 'interpolated'.
+    Returns (updated_rows, interpolation_review_rows)."""
+    from collections import defaultdict
+    by_logical: dict[str, list[dict]] = defaultdict(list)
+    for row in logical_rows:
+        if row.get("association_status") == "accepted":
+            by_logical[row["logical_vehicle_id"]].append(row)
+
+    review_rows: list[dict] = []
+    new_rows: list[dict] = []
+
+    for logical_id, rows in sorted(by_logical.items()):
+        ordered = sorted(rows, key=lambda r: int(float(r["frame_id"])))
+        for i in range(len(ordered) - 1):
+            cur = ordered[i]
+            nxt = ordered[i + 1]
+            cur_f = int(float(cur["frame_id"]))
+            nxt_f = int(float(nxt["frame_id"]))
+            gap = nxt_f - cur_f - 1
+            if gap <= 0 or gap > max_gap_frames:
+                continue
+            for step in range(1, gap + 1):
+                ratio = step / (gap + 1)
+                frame = cur_f + step
+                x1 = as_float(cur, 'x1') + (as_float(nxt, 'x1') - as_float(cur, 'x1')) * ratio
+                y1 = as_float(cur, 'y1') + (as_float(nxt, 'y1') - as_float(cur, 'y1')) * ratio
+                x2 = as_float(cur, 'x2') + (as_float(nxt, 'x2') - as_float(cur, 'x2')) * ratio
+                y2 = as_float(cur, 'y2') + (as_float(nxt, 'y2') - as_float(cur, 'y2')) * ratio
+                cx, cy = (x1 + x2) / 2, (y1 + y2) / 2
+                new_row = dict(cur)
+                new_row['frame_id'] = str(frame)
+                new_row['x1'] = f'{x1:.2f}'
+                new_row['y1'] = f'{y1:.2f}'
+                new_row['x2'] = f'{x2:.2f}'
+                new_row['y2'] = f'{y2:.2f}'
+                new_row['center_x'] = f'{cx:.2f}'
+                new_row['center_y'] = f'{cy:.2f}'
+                new_row['association_status'] = 'interpolated'
+                new_rows.append(new_row)
+
+            center_dist = distance(center(cur), center(nxt))
+            review_rows.append({
+                'logical_vehicle_id': logical_id,
+                'from_frame': str(cur_f),
+                'to_frame': str(nxt_f),
+                'gap_frames': str(gap),
+                'interpolated_count': str(gap),
+                'center_distance_px': f'{center_dist:.2f}',
+                'center_distance_per_frame': f'{center_dist / max(1, gap + 1):.2f}',
+                'status': 'interpolated',
+            })
+
+    all_rows = [dict(r) for r in logical_rows] + new_rows
+    all_rows.sort(key=lambda r: (int(float(r["frame_id"])), r["logical_vehicle_id"], r.get("association_status", ""), r.get("raw_track_id", "")))
+    review_rows.sort(key=lambda r: (r["logical_vehicle_id"], int(r["from_frame"])))
+    return all_rows, review_rows
+
 def build_logical_vehicle_consistency(
     detections: list[dict],
     final_targets: list[dict],
@@ -1822,6 +1905,7 @@ def build_logical_vehicle_consistency(
     logical_tracks, raw_split_review = apply_same_raw_continuity_merges(logical_tracks)
     logical_tracks, fragment_absorption_review = apply_fragment_path_absorption(logical_tracks)
     logical_tracks, cross_raw_recovery_review = apply_cross_raw_recovery_merges(logical_tracks)
+    logical_tracks, interpolation_review = fill_occlusion_gaps(logical_tracks)
     logical_vehicle_summary = build_logical_summary_from_rows(logical_tracks)
     raw_track_mapping = build_raw_mapping_from_rows(logical_tracks)
     validity_report = build_target_validity_report(logical_tracks)
@@ -1849,6 +1933,7 @@ def build_logical_vehicle_consistency(
         target_quality_report=target_quality_report,
         cross_raw_recovery_review=cross_raw_recovery_review,
         flicker_gap_review=flicker_gap_review,
+        interpolation_review=interpolation_review,
     )
 
 
@@ -1872,3 +1957,4 @@ def write_consistency_outputs(output_dir: Path, outputs: ConsistencyOutputs) -> 
     write_csv(output_dir / "target_quality_report.csv", outputs.target_quality_report, TARGET_QUALITY_FIELDS)
     write_csv(output_dir / "cross_raw_recovery_review.csv", outputs.cross_raw_recovery_review, CROSS_RAW_RECOVERY_FIELDS)
     write_csv(output_dir / "flicker_gap_review.csv", outputs.flicker_gap_review, FLICKER_GAP_FIELDS)
+    write_csv(output_dir / "occlusion_gap_review.csv", outputs.interpolation_review, INTERPOLATION_FIELDS)
