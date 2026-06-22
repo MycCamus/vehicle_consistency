@@ -48,7 +48,7 @@ def final_render_rows(logical_rows: list[dict]) -> list[dict]:
         row
         for row in logical_rows
         if row.get("association_status") == "accepted"
-        and row.get("final_gate_status") == "AUTO_KEEP"
+        and row.get("final_gate_status") in {"AUTO_KEEP", "REVIEW_ONLY_IF_UNCERTAIN"}
     ]
 
 

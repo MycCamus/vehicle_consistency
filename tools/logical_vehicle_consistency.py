@@ -989,8 +989,6 @@ def target_quality_reasons(metrics: dict, detected_frame_count: int) -> list[str
         reasons.append("border_short_target")
     if detected_frame_count < 80 and metrics["total_displacement_px"] < 8.0:
         reasons.append("static_like")
-    if metrics["mean_speed_px_per_frame"] < 0.5 and metrics["total_displacement_px"] < 10.0:
-        reasons.append("static_vehicle")
     nearby_competitor_ratio = metrics.get("nearby_competitor_count", 0) / max(1, detected_frame_count)
     if reasons and nearby_competitor_ratio >= 0.30:
         reasons.append("nearby_competitor")
@@ -1060,9 +1058,6 @@ def build_target_validity_report(logical_rows: list[dict]) -> list[dict]:
         ):
             status = "AUTO_EXCLUDE"
             exclude_reason = "short_static_false_positive"
-        elif "static_vehicle" in quality_reasons:
-            status = "AUTO_EXCLUDE"
-            exclude_reason = "static_vehicle"
         elif "border_short_target" in quality_reasons and "small_area" in quality_reasons:
             status = "REVIEW_ONLY_IF_UNCERTAIN"
             review_reason = "border_short_target"
@@ -1391,7 +1386,7 @@ def raw_track_ids_for_rows(rows: list[dict]) -> str:
 
 def build_cross_raw_recovery_review(
     logical_rows: list[dict],
-    max_gap_frames: int = 60,
+    max_gap_frames: int = 80,
     max_center_distance_per_frame: float = 3.0,
     max_size_ratio: float = 1.6,
     min_segment_frames: int = 20,
@@ -1523,8 +1518,8 @@ def apply_cross_raw_recovery_merges(
     for row in logical_rows:
         copy = dict(row)
         replacement_id = merge_map.get(copy["logical_vehicle_id"])
-        if replacement_id is not None:
-            copy["logical_vehicle_id"] = replacement_id
+        if replacement_id is not None:                   # 如果这行是"被合并"的那一方
+            copy["logical_vehicle_id"] = replacement_id  # ← 直接改 ID
         output.append(copy)
     output.sort(key=lambda item: (int(float(item["frame_id"])), item["logical_vehicle_id"], item["association_status"], item["raw_track_id"]))
 
